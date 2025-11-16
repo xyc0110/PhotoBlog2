@@ -13,22 +13,25 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.Toast;
+import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> {
 
-    private List<Bitmap> bitmapList;
+    private List<PostItem> itemList;
+    private List<PostItem> originalList;
     private Context context;
 
-    public ImageAdapter(Context context, List<Bitmap> bitmapList) {
+    public ImageAdapter(Context context, List<PostItem> itemList) {
         this.context = context;
-        this.bitmapList = bitmapList;
+        this.itemList = itemList;
+        this.originalList = new ArrayList<>(itemList);
     }
 
     @NonNull
@@ -40,36 +43,53 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
 
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-        Bitmap bitmap = bitmapList.get(position);
-        holder.imageView.setImageBitmap(bitmap);
+        PostItem item = itemList.get(position);
 
-        //  点击放大功能
-        holder.imageView.setOnClickListener(v -> showFullScreenImage(bitmap));
+        holder.imageView.setImageBitmap(item.image);
+        holder.txtTitle.setText(item.title);
 
-        //  点击保存按钮：将图片保存到系统相册
-        holder.btnSave.setOnClickListener(v -> {
-            saveImageToGallery(bitmap);
-            Toast.makeText(context, "이미지가 갤러리에 저장되었습니다!", Toast.LENGTH_SHORT).show();
-        });
+        holder.imageView.setOnClickListener(v -> showFullScreenImage(item.image));
+
+        holder.btnSave.setOnClickListener(v -> saveImageToGallery(item.image));
     }
 
     @Override
     public int getItemCount() {
-        return bitmapList.size();
+        return itemList.size();
     }
 
-    public void clearImages() {
-        bitmapList.clear();
+    public void clearItems() {
+        itemList.clear();
         notifyDataSetChanged();
     }
 
-    public void setImages(List<Bitmap> newImages) {
-        bitmapList.clear();
-        bitmapList.addAll(newImages);
+    public void setItems(List<PostItem> newItems) {
+        itemList.clear();
+        itemList.addAll(newItems);
+        originalList = new ArrayList<>(newItems);
         notifyDataSetChanged();
     }
 
-    //  全屏查看
+    public void filterImages(String keyword) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            itemList = new ArrayList<>(originalList);
+            notifyDataSetChanged();
+            return;
+        }
+
+        keyword = keyword.toLowerCase();
+        List<PostItem> filtered = new ArrayList<>();
+
+        for (PostItem p : originalList) {
+            if (p.title.toLowerCase().contains(keyword)) {
+                filtered.add(p);
+            }
+        }
+
+        itemList = filtered;
+        notifyDataSetChanged();
+    }
+
     private void showFullScreenImage(Bitmap image) {
         Dialog dialog = new Dialog(context, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
         dialog.setContentView(R.layout.dialog_fullscreen_image);
@@ -80,7 +100,6 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
         dialog.show();
     }
 
-    //  保存图片到相册
     private void saveImageToGallery(Bitmap bitmap) {
         try {
             ContentResolver resolver = context.getContentResolver();
@@ -97,18 +116,18 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(context, "저장 실패!", Toast.LENGTH_SHORT).show();
         }
     }
 
-    //  ViewHolder
     public static class ViewHolder extends RecyclerView.ViewHolder {
         ImageView imageView;
+        TextView txtTitle;
         Button btnSave;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             imageView = itemView.findViewById(R.id.imageViewItem);
+            txtTitle = itemView.findViewById(R.id.imageTitle);
             btnSave = itemView.findViewById(R.id.btnSave);
         }
     }

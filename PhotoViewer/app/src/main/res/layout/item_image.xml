@@ -5,6 +5,14 @@
     android:orientation="vertical"
     android:padding="8dp">
 
+    <TextView
+        android:id="@+id/imageTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="title"
+        android:textSize="16dp"
+        android:textColor="#000000"
+        android:padding="4dp" />
 
     <ImageView
         android:id="@+id/imageViewItem"
@@ -12,7 +20,6 @@
         android:layout_height="200dp"
         android:scaleType="centerCrop"
         android:contentDescription="이미지 항목" />
-
 
     <Button
         android:id="@+id/btnSave"

@@ -9,6 +9,7 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.View;
 import android.widget.Button;
+import android.widget.SearchView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -40,15 +41,13 @@ public class MainActivity extends AppCompatActivity {
     private RecyclerView recyclerView;
     private ImageAdapter adapter;
 
-    private boolean isAscending = false; //  排序标志位（false=最新在上）
+    private List<PostItem> originalList = new ArrayList<>();
 
-    private static final boolean USE_SOCKET_SERVER = false;
+    private boolean isAscending = false;
 
-    private static final String DJANGO_BASE_URL = "https://xiayucheng.pythonanywhere.com";
+    private static final String DJANGO_BASE_URL = "http://10.0.2.2:8000";
     private static final String DJANGO_API_PATH = "/api_root/Post/";
-    private static final String SOCKET_BASE_URL = "https://xiayucheng.pythonanywhere.com"; // 如果 socket 没用可以留空
     private static final String TOKEN = "4988a3d8f97982de343af1b4f41550088b123d44";
-
 
     private ActivityResultLauncher<Intent> imagePickerLauncher;
 
@@ -63,11 +62,27 @@ public class MainActivity extends AppCompatActivity {
         adapter = new ImageAdapter(this, new ArrayList<>());
         recyclerView.setAdapter(adapter);
 
-        //  정렬按钮点击事件
         Button btnSort = findViewById(R.id.btn_sort);
         btnSort.setOnClickListener(v -> toggleSortOrder());
 
-        // ✅ 图片选择器
+        SearchView searchView = findViewById(R.id.searchView);
+        searchView.setQueryHint("검색 (예: person, phone)");
+        searchView.setIconifiedByDefault(false);
+
+        searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                adapter.filterImages(query);
+                return true;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                adapter.filterImages(newText);
+                return true;
+            }
+        });
+
         imagePickerLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
@@ -80,11 +95,9 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-
     private void toggleSortOrder() {
         isAscending = !isAscending;
 
-        // 设置文字提示
         if (isAscending) {
             textView.setText("오름차순 정렬됨");
             Toast.makeText(this, "오름차순 정렬 성공!", Toast.LENGTH_SHORT).show();
@@ -93,15 +106,12 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "내림차순 정렬 성공!", Toast.LENGTH_SHORT).show();
         }
 
-        // 重新加载图片
         new CloadImage().execute(DJANGO_BASE_URL + DJANGO_API_PATH);
     }
 
-
     public void onClickDownload(View v) {
         textView.setText("이미지 갱신 중...");
-        String url = USE_SOCKET_SERVER ? SOCKET_BASE_URL : (DJANGO_BASE_URL + DJANGO_API_PATH);
-        new CloadImage().execute(url);
+        new CloadImage().execute(DJANGO_BASE_URL + DJANGO_API_PATH);
     }
 
     public void onClickUpload(View v) {
@@ -109,74 +119,74 @@ public class MainActivity extends AppCompatActivity {
         imagePickerLauncher.launch(intent);
     }
 
-    private class CloadImage extends AsyncTask<String, Integer, List<Bitmap>> {
+    private class CloadImage extends AsyncTask<String, Integer, List<PostItem>> {
 
         @Override
         protected void onPreExecute() {
             super.onPreExecute();
-            adapter.clearImages(); // ✅ 每次刷新前清空旧图片
+            adapter.clearItems();
         }
 
         @Override
-        protected List<Bitmap> doInBackground(String... urls) {
-            List<Bitmap> bitmapList = new ArrayList<>();
+        protected List<PostItem> doInBackground(String... urls) {
+            List<PostItem> postList = new ArrayList<>();
             try {
-                String apiUrl = urls[0];
-                URL urlAPI = new URL(apiUrl);
+                URL urlAPI = new URL(urls[0]);
                 HttpURLConnection conn = (HttpURLConnection) urlAPI.openConnection();
                 conn.setRequestProperty("Authorization", "Token " + TOKEN);
                 conn.setRequestMethod("GET");
                 conn.setConnectTimeout(3000);
                 conn.setReadTimeout(3000);
-                int responseCode = conn.getResponseCode();
 
-                if (responseCode == HttpURLConnection.HTTP_OK) {
+                if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
                     InputStream is = conn.getInputStream();
                     BufferedReader reader = new BufferedReader(new InputStreamReader(is));
                     StringBuilder result = new StringBuilder();
                     String line;
-                    while ((line = reader.readLine()) != null) {
-                        result.append(line);
-                    }
+                    while ((line = reader.readLine()) != null) result.append(line);
                     is.close();
 
                     JSONArray aryJson = new JSONArray(result.toString());
                     for (int i = 0; i < aryJson.length(); i++) {
                         JSONObject postJson = aryJson.getJSONObject(i);
+
+                        String title = postJson.getString("title");
                         String imageUrl = postJson.getString("image");
-                        if (imageUrl != null && !imageUrl.equals("")) {
-                            if (imageUrl.contains("127.0.0.1")) {
-                                imageUrl = imageUrl.replace("127.0.0.1", "10.0.2.2");
-                            }
-                            URL myImageUrl = new URL(imageUrl);
-                            HttpURLConnection imgConn = (HttpURLConnection) myImageUrl.openConnection();
-                            imgConn.setConnectTimeout(3000);
-                            imgConn.setReadTimeout(3000);
-                            InputStream imgStream = imgConn.getInputStream();
-                            Bitmap imageBitmap = BitmapFactory.decodeStream(imgStream);
-                            bitmapList.add(imageBitmap);
-                            imgStream.close();
+
+                        if (imageUrl.contains("127.0.0.1")) {
+                            imageUrl = imageUrl.replace("127.0.0.1", "10.0.2.2");
                         }
+
+                        URL imgURL = new URL(imageUrl);
+                        HttpURLConnection imgConn = (HttpURLConnection) imgURL.openConnection();
+                        imgConn.setConnectTimeout(3000);
+                        imgConn.setReadTimeout(3000);
+                        InputStream imgStream = imgConn.getInputStream();
+                        Bitmap imageBitmap = BitmapFactory.decodeStream(imgStream);
+
+                        postList.add(new PostItem(title, imageBitmap));
+                        imgStream.close();
                     }
                 }
             } catch (IOException | JSONException e) {
                 e.printStackTrace();
             }
-            return bitmapList;
+            return postList;
         }
 
         @Override
-        protected void onPostExecute(List<Bitmap> images) {
-            if (images == null || images.isEmpty()) {
+        protected void onPostExecute(List<PostItem> items) {
+            if (items == null || items.isEmpty()) {
                 textView.setText("불러올 이미지가 없습니다.");
-            } else {
-                // ✅ 排序功能应用
-                if (isAscending) {
-                    Collections.reverse(images);
-                }
-                textView.setText("이미지 로드 성공!");
-                adapter.setImages(images);
+                return;
             }
+
+            originalList = new ArrayList<>(items);
+
+            if (isAscending) Collections.reverse(items);
+
+            adapter.setItems(items);
+            textView.setText("이미지 로드 성공!");
         }
     }
 
@@ -206,6 +216,7 @@ public class MainActivity extends AppCompatActivity {
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     outputStream.write(buffer, 0, bytesRead);
                 }
+
                 outputStream.writeBytes("\r\n--" + boundary + "--\r\n");
 
                 inputStream.close();
