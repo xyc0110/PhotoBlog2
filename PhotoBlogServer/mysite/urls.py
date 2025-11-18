@@ -2,14 +2,19 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-
 from rest_framework.authtoken import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api_root/', include('blog.urls')),
-    path('api-token-auth/', views.obtain_auth_token),
+
+    
+    path('api_root/', include('blog.api_urls')),
+
+ 
     path('', include('blog.urls')),
+
+   
+    path('api-token-auth/', views.obtain_auth_token),
 ]
 
 if settings.DEBUG:
